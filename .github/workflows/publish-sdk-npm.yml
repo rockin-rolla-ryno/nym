@@ -19,7 +19,21 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      - name: Validate ref is from a protected branch or tag
+        shell: bash
+        run: |
+          # Allow main/master branches or any release tags
+          if [[ "${{ github.ref }}" =~ ^refs/heads/(main|master|develop)$ ]] || [[ "${{ github.ref }}" =~ ^refs/tags/ ]]; then
+            echo "Validated ref: ${{ github.ref }}"
+          else
+            echo "Error: This workflow can only be run from main, master, develop branches or release tags"
+            echo "Current ref: ${{ github.ref }}"
+            exit 1
+          fi
+
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6.0.9
