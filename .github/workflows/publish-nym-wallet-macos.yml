@@ -21,18 +21,18 @@ jobs:
       release_tag: ${{ github.ref_name }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v6.0.0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.9
+        uses: pnpm/action-setup@fe1e16a35988d0c547f7995a192a2a2d37bc10e8 # v6.0.9
         with:
           version: 11.1.2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: 24
           
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@7b1c307e0dcbda6122208f10795a713336a9b35a # stable as of 2024-12-18
         with:
           toolchain: ${{ vars.REQUIRED_RUSTC_VERSION }}
           
@@ -66,7 +66,7 @@ jobs:
           security list-keychain -d user -s $KEYCHAIN_PATH
 
       - name: Create env file
-        uses: timheuer/base64-to-file@v2.0
+        uses: timheuer/base64-to-file@ca9e30baf83f7f8f3a421d1204f2e2b1a4da265d # v2.0.3
         with:
           fileName: '.env'
           encodedString: ${{ secrets.WALLET_ADMIN_ADDRESS }}
@@ -111,7 +111,7 @@ jobs:
           cd -
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # v7.0.0
         with:
           name: nym-wallet.app.tar.gz
           path: nym-wallet/target/x86_64-apple-darwin/release/bundle/macos/nym-wallet.app.tar.gz
@@ -124,7 +124,7 @@ jobs:
           
       - id: create-release
         name: Upload to release based on tag name
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@01570a1f39cb168c169c802c3bceb9e93fb10974 # v3.0.0
         if: github.event_name == 'release'
         with:
           files: |
