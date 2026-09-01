@@ -37,11 +37,25 @@ jobs:
       - name: Publish remaining crates
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          RESUME_AFTER: ${{ inputs.resume_after }}
+          PUBLISH_INTERVAL: ${{ inputs.publish_interval }}
         run: |
-          CRATES=$(cargo workspaces plan 2>/dev/null | sed -n '/^${{ inputs.resume_after }}$/,$p' | tail -n +2)
+          # Validate publish_interval is a non-negative integer
+          if ! [[ "$PUBLISH_INTERVAL" =~ ^[0-9]+$ ]]; then
+            echo "Error: publish_interval must be a non-negative integer, got: '$PUBLISH_INTERVAL'"
+            exit 1
+          fi
+
+          # Validate resume_after contains only safe characters (alphanumeric, dash, underscore)
+          if ! [[ "$RESUME_AFTER" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            echo "Error: resume_after must contain only alphanumeric characters, dashes, and underscores, got: '$RESUME_AFTER'"
+            exit 1
+          fi
+
+          CRATES=$(cargo workspaces plan 2>/dev/null | sed -n '/^'"$RESUME_AFTER"'$/,$p' | tail -n +2)
 
           if [ -z "$CRATES" ]; then
-            echo "Error: No crates found after '${{ inputs.resume_after }}'"
+            echo "Error: No crates found after '$RESUME_AFTER'"
             echo "Check the crate name matches exactly from 'cargo workspaces plan'"
             exit 1
           fi
@@ -53,8 +67,8 @@ jobs:
           echo "$CRATES" | while read crate; do
             echo "Publishing $crate..."
             cargo publish -p "$crate" --allow-dirty
-            echo "Waiting ${{ inputs.publish_interval }}s before next publish..."
-            sleep ${{ inputs.publish_interval }}
+            echo "Waiting ${PUBLISH_INTERVAL}s before next publish..."
+            sleep "$PUBLISH_INTERVAL"
           done
 
       - name: Show package versions
