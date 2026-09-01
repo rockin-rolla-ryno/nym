@@ -47,7 +47,28 @@ jobs:
       CARGO_TERM_COLOR: always
       RUSTUP_PERMIT_COPY_RENAME: 1
     steps:
+      - name: Determine checkout ref
+        id: checkout-ref
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # For manual dispatch, only allow protected refs (tags or default branch)
+            REF="${{ github.ref }}"
+            if [[ "$REF" == refs/tags/* ]] || [[ "$REF" == "refs/heads/${{ github.event.repository.default_branch }}" ]]; then
+              echo "ref=$REF" >> "$GITHUB_OUTPUT"
+              echo "::notice::Checking out user-selected ref: $REF"
+            else
+              echo "::error::workflow_dispatch is only allowed from tags or the default branch for security reasons"
+              exit 1
+            fi
+          else
+            # For scheduled runs, use the default branch
+            echo "ref=refs/heads/${{ github.event.repository.default_branch }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.checkout-ref.outputs.ref }}
 
       - name: Prepare build output directory
         shell: bash
@@ -61,13 +82,34 @@ jobs:
       - name: Install Dependencies (Linux)
         run: sudo apt-get update && sudo apt-get -y install libudev-dev
 
+      - name: Validate and sanitize extra_features input
+        if: github.event_name == 'workflow_dispatch'
+        id: validate-input
+        shell: bash
+        env:
+          EXTRA_FEATURES_INPUT: ${{ inputs.extra_features }}
+        run: |
+          # Validate extra_features contains only allowed characters: alphanumeric, comma, hyphen, underscore
+          if [[ -n "$EXTRA_FEATURES_INPUT" ]]; then
+            if [[ ! "$EXTRA_FEATURES_INPUT" =~ ^[a-zA-Z0-9,_-]+$ ]]; then
+              echo "::error::extra_features input contains invalid characters. Only alphanumeric, comma, hyphen, and underscore are allowed."
+              exit 1
+            fi
+            echo "sanitized_extra_features=$EXTRA_FEATURES_INPUT" >> "$GITHUB_OUTPUT"
+            echo "::notice::Validated extra_features: $EXTRA_FEATURES_INPUT"
+          else
+            echo "sanitized_extra_features=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Resolve cargo features and RUSTFLAGS
         if: github.event_name == 'workflow_dispatch'
         shell: bash
+        env:
+          PROFILE: ${{ inputs.feature_profile }}
+          EXTRA: ${{ steps.validate-input.outputs.sanitized_extra_features }}
+          ADD_TOKIO_UNSTABLE: ${{ inputs.add_tokio_unstable }}
         run: |
           FEATURES=""
-          PROFILE="${{ inputs.feature_profile }}"
-          EXTRA="${{ inputs.extra_features }}"
 
           if [[ "$PROFILE" != "none" && -n "$PROFILE" ]]; then
             FEATURES="$PROFILE"
@@ -88,7 +130,7 @@ jobs:
             echo "::notice::No additional cargo features selected"
           fi
 
-          if [[ "$FEATURES" == *"tokio-console"* ]] || [[ "${{ inputs.add_tokio_unstable }}" == "true" ]]; then
+          if [[ "$FEATURES" == *"tokio-console"* ]] || [[ "$ADD_TOKIO_UNSTABLE" == "true" ]]; then
             echo "RUSTFLAGS=--cfg tokio_unstable" >> "$GITHUB_ENV"
             echo "::notice::Enabled RUSTFLAGS --cfg tokio_unstable"
           fi
@@ -145,11 +187,27 @@ jobs:
 
       - name: Publish builds to S3
         continue-on-error: true
-        uses: ./.github/actions/push-to-s3
-        with:
-          source_path: ci-builds/
-          destination: ""
-          endpoint: ${{ env.S3_ENDPOINT }}
-          bucket: ${{ env.S3_BUCKET }}
-          aws_access_key_id: ${{ secrets.GARAGE_AWS_ACCESS_KEY_ID }}
-          aws_secret_access_key: ${{ secrets.GARAGE_AWS_SECRET_ACCESS_KEY }}
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.GARAGE_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.GARAGE_AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: garage
+          SOURCE_PATH: ci-builds/
+          DESTINATION: ""
+          ENDPOINT: ${{ env.S3_ENDPOINT }}
+          BUCKET: ${{ env.S3_BUCKET }}
+        run: |
+          # Ensure AWS CLI is available
+          if ! command -v aws >/dev/null 2>&1; then
+            echo "AWS CLI not found, installing..."
+            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+            unzip -q /tmp/awscliv2.zip -d /tmp
+            (sudo /tmp/aws/install --update || /tmp/aws/install --update --bin-dir "$HOME/.local/bin" --install-dir "$HOME/.local/aws-cli")
+            export PATH="$HOME/.local/bin:$PATH"
+          fi
+          aws --version
+          
+          # Sync to S3
+          export PATH="$HOME/.local/bin:$PATH"
+          aws s3 sync "$SOURCE_PATH" "s3://$BUCKET/$DESTINATION" \
+            --endpoint-url "$ENDPOINT" --no-progress
