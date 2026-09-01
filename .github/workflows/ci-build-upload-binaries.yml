@@ -64,10 +64,14 @@ jobs:
       - name: Resolve cargo features and RUSTFLAGS
         if: github.event_name == 'workflow_dispatch'
         shell: bash
+        env:
+          PROFILE_INPUT: ${{ inputs.feature_profile }}
+          EXTRA_INPUT: ${{ inputs.extra_features }}
+          TOKIO_UNSTABLE_INPUT: ${{ inputs.add_tokio_unstable }}
         run: |
           FEATURES=""
-          PROFILE="${{ inputs.feature_profile }}"
-          EXTRA="${{ inputs.extra_features }}"
+          PROFILE="$PROFILE_INPUT"
+          EXTRA="$EXTRA_INPUT"
 
           if [[ "$PROFILE" != "none" && -n "$PROFILE" ]]; then
             FEATURES="$PROFILE"
@@ -88,7 +92,7 @@ jobs:
             echo "::notice::No additional cargo features selected"
           fi
 
-          if [[ "$FEATURES" == *"tokio-console"* ]] || [[ "${{ inputs.add_tokio_unstable }}" == "true" ]]; then
+          if [[ "$FEATURES" == *"tokio-console"* ]] || [[ "$TOKIO_UNSTABLE_INPUT" == "true" ]]; then
             echo "RUSTFLAGS=--cfg tokio_unstable" >> "$GITHUB_ENV"
             echo "::notice::Enabled RUSTFLAGS --cfg tokio_unstable"
           fi
@@ -100,7 +104,7 @@ jobs:
 
       - name: Build all binaries
         shell: bash
-        run: cargo build --workspace --release ${{ env.CARGO_FEATURES }}
+        run: cargo build --workspace --release ${CARGO_FEATURES}
 
       - name: Install cargo-deb
         if: github.event_name == 'workflow_dispatch' && inputs.enable_deb == true
