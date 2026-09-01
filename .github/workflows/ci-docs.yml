@@ -2,8 +2,7 @@ name: ci-docs
 
 on:
   workflow_dispatch:
-  push:
-    branches-ignore: [master]
+  pull_request:
     paths:
       - "documentation/docs/**"
       - "sdk/typescript/packages/sdk/src/**"
@@ -54,7 +53,16 @@ jobs:
       - name: Check if TypeScript SDK source changed
         id: check-ts-sdk
         run: |
-          if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -qE '^sdk/typescript/packages/(sdk|mix-tunnel|mix-fetch|mix-dns|mix-websocket)/src/'; then
+          # For pull requests, compare against the base branch
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+            HEAD_SHA="${{ github.sha }}"
+          fi
+          
+          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -qE '^sdk/typescript/packages/(sdk|mix-tunnel|mix-fetch|mix-dns|mix-websocket)/src/'; then
             echo "changed=true" >> $GITHUB_OUTPUT
           else
             echo "changed=false" >> $GITHUB_OUTPUT
@@ -85,14 +93,26 @@ jobs:
       - name: Move files to /dist/
         run: ../scripts/move-to-dist.sh
 
+      - name: Ensure AWS CLI is available
+        continue-on-error: true
+        run: |
+          if ! command -v aws >/dev/null 2>&1; then
+            echo "AWS CLI not found, installing..."
+            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+            unzip -q /tmp/awscliv2.zip -d /tmp
+            (sudo /tmp/aws/install --update || /tmp/aws/install --update --bin-dir "$HOME/.local/bin" --install-dir "$HOME/.local/aws-cli")
+            export PATH="$HOME/.local/bin:$PATH"
+          fi
+          aws --version
+        working-directory: ${{ github.workspace }}
+
       - name: Publish docs to S3
         continue-on-error: true
-        uses: ./.github/actions/push-to-s3
-        with:
-          source_path: dist/docs/
-          destination: docs-nextra-${{ env.GITHUB_REF_SLUG }}/
-          args: "--delete --exclude '*/node_modules/*'"
-          endpoint: ${{ env.S3_ENDPOINT }}
-          bucket: ${{ env.S3_BUCKET }}
-          aws_access_key_id: ${{ secrets.GARAGE_AWS_ACCESS_KEY_ID }}
-          aws_secret_access_key: ${{ secrets.GARAGE_AWS_SECRET_ACCESS_KEY }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.GARAGE_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.GARAGE_AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: garage
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          aws s3 sync "dist/docs/" "s3://${{ env.S3_BUCKET }}/docs-nextra-${{ env.GITHUB_REF_SLUG }}/" \
+            --endpoint-url "${{ env.S3_ENDPOINT }}" --no-progress --delete --exclude '*/node_modules/*'
