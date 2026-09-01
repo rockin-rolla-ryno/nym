@@ -115,11 +115,11 @@ jobs:
           ' tauri.conf.json
       - name: Install project dependencies
         shell: bash
-        run: cd .. && pnpm i
+        run: cd .. && pnpm install --frozen-lockfile
 
       - name: Install app dependencies
         shell: bash
-        run: pnpm i
+        run: pnpm install --frozen-lockfile
 
       - name: Build and sign it
         shell: bash

@@ -47,7 +47,7 @@ jobs:
         run: cargo install wasm-opt
 
       - name: Install dependencies
-        run: pnpm i
+        run: pnpm install --frozen-lockfile
 
       - name: Build WASM and Typescript SDK
         run: pnpm sdk:build
