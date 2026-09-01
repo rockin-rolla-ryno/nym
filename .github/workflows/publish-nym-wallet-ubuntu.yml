@@ -45,10 +45,10 @@ jobs:
       
       - name: Install project dependencies
         shell: bash
-        run: cd .. && pnpm i
+        run: cd .. && pnpm install --frozen-lockfile
       
       - name: Install app dependencies
-        run: pnpm i
+        run: pnpm install --frozen-lockfile
       
       - name: Create env file
         uses: timheuer/base64-to-file@v2.0

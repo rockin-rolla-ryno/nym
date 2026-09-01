@@ -77,7 +77,7 @@ jobs:
 
       - name: Install project dependencies
         shell: bash
-        run: cd .. && pnpm i
+        run: cd .. && pnpm install --frozen-lockfile
 
       - name: Build
         shell: bash
