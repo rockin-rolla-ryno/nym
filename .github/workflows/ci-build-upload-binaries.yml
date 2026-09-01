@@ -47,7 +47,8 @@ jobs:
       CARGO_TERM_COLOR: always
       RUSTUP_PERMIT_COPY_RENAME: 1
     steps:
-      - uses: actions/checkout@v6
+      # actions/checkout v6.0.0
+      - uses: actions/checkout@1d96c772d19495a3b5c517cd2bc0cb401ea0529f
 
       - name: Prepare build output directory
         shell: bash
@@ -93,8 +94,9 @@ jobs:
             echo "::notice::Enabled RUSTFLAGS --cfg tokio_unstable"
           fi
 
+      # dtolnay/rust-toolchain pinned to stable commit (2024-12-20)
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@fc3253060d0c959bea12a59f10f8391454a0b02d
         with:
           toolchain: ${{ vars.REQUIRED_RUSTC_VERSION }}
 
@@ -112,9 +114,10 @@ jobs:
         shell: bash
         run: make deb
 
+      # actions/upload-artifact v7.0.0
       - name: Upload Artifact
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
         with:
           name: nym-binaries-artifacts
           path: |
