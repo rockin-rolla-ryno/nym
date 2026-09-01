@@ -3,17 +3,65 @@ import fetch from "node-fetch";
 import { Octokit } from "@octokit/rest";
 import fs from "fs";
 import path from "path";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 
-function getBinInfo(path) {
+/**
+ * Validates that a filename is safe and does not contain path traversal sequences
+ * or shell metacharacters that could be exploited.
+ * @param {string} filename - The filename to validate
+ * @returns {boolean} - True if the filename is safe
+ */
+function isValidFilename(filename) {
+    if (!filename || typeof filename !== 'string') {
+        return false;
+    }
+    
+    // Reject path traversal attempts
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+        return false;
+    }
+    
+    // Reject shell metacharacters and control characters
+    const dangerousChars = /[;&|`$()<>{}[\]!*?~\n\r\t\0]/;
+    if (dangerousChars.test(filename)) {
+        return false;
+    }
+    
+    // Reject filenames that start with dash (could be interpreted as command flags)
+    if (filename.startsWith('-')) {
+        return false;
+    }
+    
+    return true;
+}
+
+/**
+ * Validates that a resolved path is within the expected directory.
+ * @param {string} resolvedPath - The resolved absolute path
+ * @param {string} baseDirectory - The base directory that should contain the path
+ * @returns {boolean} - True if the path is safely within the base directory
+ */
+function isPathWithinDirectory(resolvedPath, baseDirectory) {
+    const normalizedPath = path.resolve(resolvedPath);
+    const normalizedBase = path.resolve(baseDirectory);
+    return normalizedPath.startsWith(normalizedBase + path.sep) || normalizedPath === normalizedBase;
+}
+
+function getBinInfo(filePath) {
     // let's be super naive about it. add a+x bits on the file and try to run the command
     try {
-        let mode = fs.statSync(path).mode
-        fs.chmodSync(path, mode | 0o111)
+        let mode = fs.statSync(filePath).mode
+        fs.chmodSync(filePath, mode | 0o111)
 
-        const cmd = `${path} build-info --output=json`;
-        console.log(`🚚 Running ${cmd}... (for max of 3 seconds, then SIGTERM)`);
-        const raw = execSync(cmd, { stdio: 'pipe', encoding: "utf8", timeout: 3000 });
+        console.log(`🚚 Running ${filePath} build-info --output=json... (for max of 3 seconds, then SIGTERM)`);
+        // Use execFileSync with array arguments to prevent shell injection
+        // execFileSync does not invoke a shell, so metacharacters are treated as literal arguments
+        const raw = execFileSync(filePath, ['build-info', '--output=json'], { 
+            stdio: 'pipe', 
+            encoding: "utf8", 
+            timeout: 3000,
+            shell: false  // Explicitly disable shell to prevent command injection
+        });
         const parsed = JSON.parse(raw)
         console.log(`    ✅ ok`);
         return parsed
@@ -41,6 +89,12 @@ async function run(assets, algorithm, filename, cache) {
     let numAwaiting = 0;
     for (const asset of assets) {
         if (filename === "" || asset.name !== filename) { // don't hash the hash file (if the file has the same name)
+            // Validate asset name to prevent path traversal and command injection
+            if (!isValidFilename(asset.name)) {
+                console.error(`⚠️ Skipping asset with invalid or potentially malicious name: ${asset.name}`);
+                continue;
+            }
+            
             numAwaiting++;
 
             let buffer = null;
@@ -48,6 +102,13 @@ async function run(assets, algorithm, filename, cache) {
 
             // cache in `${WORKING_DIR}/.tmp/`
             const cacheFilename = path.join(directory, `${asset.name}`);
+            
+            // Validate that the resolved path is within the intended directory
+            if (!isPathWithinDirectory(cacheFilename, directory)) {
+                console.error(`⚠️ Skipping asset: resolved path ${cacheFilename} is outside the intended directory ${directory}`);
+                continue;
+            }
+            
             if(!fs.existsSync(cacheFilename)) {
                 console.log(`⬇️ Downloading ${asset.browser_download_url}... to ${cacheFilename} [${numAwaiting} of ${assets.length}]`);
                 buffer = Buffer.from(await fetch(asset.browser_download_url).then(res => res.arrayBuffer()));
