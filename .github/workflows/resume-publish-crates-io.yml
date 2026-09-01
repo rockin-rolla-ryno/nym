@@ -32,9 +32,10 @@ jobs:
       - name: Publish remaining crates
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          RESUME_AFTER: ${{ inputs.resume_after }}
         run: |
           # Get crates in publish order, skip up to and including resume_after
-          cargo workspaces plan 2>/dev/null | sed -n '/^${{ inputs.resume_after }}$/,$p' | tail -n +2 | while read crate; do
+          cargo workspaces plan 2>/dev/null | sed -n "/^${RESUME_AFTER}$/,\$p" | tail -n +2 | while read crate; do
             echo "Publishing $crate..."
             cargo publish -p "$crate" --allow-dirty
             echo "Waiting 600s before next publish..."
