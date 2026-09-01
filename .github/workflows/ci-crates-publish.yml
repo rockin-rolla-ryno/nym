@@ -79,19 +79,44 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          TEAM_MEMBER="${{ inputs.backup_author }}"
-          echo "Checking and adding $TEAM_MEMBER as owner to workspace crates..."
+          # Allowlist of authorized crates.io identities that may be granted ownership.
+          # This list must be maintained manually and should include only trusted team members.
+          AUTHORIZED_OWNERS=(
+            "github:nymtech:core"
+            "jstuczyn"
+          )
+          
+          REQUESTED_OWNER="${{ inputs.backup_author }}"
+          
+          # Validate that the requested owner is in the allowlist
+          OWNER_AUTHORIZED=false
+          for authorized in "${AUTHORIZED_OWNERS[@]}"; do
+            if [ "$authorized" = "$REQUESTED_OWNER" ]; then
+              OWNER_AUTHORIZED=true
+              break
+            fi
+          done
+          
+          if [ "$OWNER_AUTHORIZED" != "true" ]; then
+            echo "ERROR: Requested owner '$REQUESTED_OWNER' is not in the authorized owners list."
+            echo "Authorized owners are: ${AUTHORIZED_OWNERS[*]}"
+            echo "To add a new owner, update the AUTHORIZED_OWNERS allowlist in this workflow."
+            exit 1
+          fi
+          
+          echo "Checking and adding $REQUESTED_OWNER as owner to workspace crates..."
 
           cargo workspaces list | while read crate; do
             echo "Checking $crate..."
 
-            if cargo owner --list "$crate" 2>/dev/null | grep -q "$TEAM_MEMBER"; then
-              echo "  $TEAM_MEMBER already owns $crate, skipping"
+            # Use proper quoting to prevent shell injection
+            if cargo owner --list "$crate" 2>/dev/null | grep -qF "$REQUESTED_OWNER"; then
+              echo "  $REQUESTED_OWNER already owns $crate, skipping"
             else
-              echo "  Adding $TEAM_MEMBER as owner of $crate..."
+              echo "  Adding $REQUESTED_OWNER as owner of $crate..."
               # See TODO in the "Add team as crate owners" step: tolerate the crates.io 403
               # for team-owned crates so a single ownership gap does not abort the publish.
-              cargo owner --add "$TEAM_MEMBER" "$crate" || echo "  WARN: could not add $TEAM_MEMBER to $crate (needs manual ownership sorting); continuing"
+              cargo owner --add "$REQUESTED_OWNER" "$crate" || echo "  WARN: could not add $REQUESTED_OWNER to $crate (needs manual ownership sorting); continuing"
               sleep 2
             fi
           done
