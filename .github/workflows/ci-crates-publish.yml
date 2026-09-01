@@ -41,10 +41,11 @@ jobs:
       - name: Publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          PUBLISH_INTERVAL: ${{ inputs.publish_interval }}
         run: |
           cargo workspaces publish \
             --publish-as-is \
-            --publish-interval ${{ inputs.publish_interval }}
+            --publish-interval "$PUBLISH_INTERVAL"
 
       - name: Show package versions
         run: cargo workspaces list --long
@@ -78,8 +79,9 @@ jobs:
       - name: Add secondary member as crate owner
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          BACKUP_AUTHOR: ${{ inputs.backup_author }}
         run: |
-          TEAM_MEMBER="${{ inputs.backup_author }}"
+          TEAM_MEMBER="$BACKUP_AUTHOR"
           echo "Checking and adding $TEAM_MEMBER as owner to workspace crates..."
 
           cargo workspaces list | while read crate; do
