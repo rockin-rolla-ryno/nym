@@ -38,6 +38,9 @@ allowBuilds:
   tiny-secp256k1: false
   unrs-resolver: true
 
+overrides:
+  "protobufjs@6": "https://npm.aikido.io/22cf871ac035aad32551c/protobufjs@6.11.6-aikido.6"
+
 catalog:
   # babel
   "@babel/core": "^7.22.10"
