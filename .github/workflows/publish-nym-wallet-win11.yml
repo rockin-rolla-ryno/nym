@@ -1,4 +1,11 @@
 name: publish-nym-wallet-win11
+# Security Note: This workflow uses SSL.com's CodeSignTool for Windows code signing.
+# The tool is pinned to a specific version and verified with a SHA256 checksum to prevent
+# supply chain attacks. When updating CodeSignTool:
+# 1. Update CODESIGNTOOL_VERSION in the "Download EV CodeSignTool" step
+# 2. Download the new version manually and calculate its SHA256 checksum
+# 3. Verify the checksum against SSL.com's official documentation or GitHub release
+# 4. Update EXPECTED_CHECKSUM with the verified checksum
 on:
   workflow_dispatch:
     inputs:
@@ -68,9 +75,50 @@ jobs:
         working-directory: nym-wallet/src-tauri
         if: env.SIGN_WINDOWS == 'true'
         shell: bash
+        env:
+          # Pin to a specific version to prevent supply chain attacks
+          CODESIGNTOOL_VERSION: "v1.3.1"
+          # Expected SHA256 checksum for version v1.3.1
+          # This checksum should be verified against SSL.com's official documentation
+          # and updated when upgrading to a new version
+          # IMPORTANT: This is a placeholder checksum. Before using this workflow in production,
+          # you MUST replace this with the actual verified SHA256 checksum of CodeSignTool v1.3.1.
+          # See .github/workflows/CODESIGNTOOL_UPDATE.md for instructions.
+          EXPECTED_CHECKSUM: "PLACEHOLDER_REPLACE_WITH_ACTUAL_SHA256_CHECKSUM_OF_CODESIGNTOOL_V1_3_1"
         run: |
-          curl -L0 https://www.ssl.com/download/codesigntool-for-linux-and-macos/ -o codesigntool.zip
-          unzip codesigntool.zip
+          set -euo pipefail
+          
+          # Download from a versioned URL instead of following redirects
+          # Note: SSL.com provides versioned releases at GitHub
+          DOWNLOAD_URL="https://github.com/SSLcom/codesigntool/releases/download/${CODESIGNTOOL_VERSION}/CodeSignTool-${CODESIGNTOOL_VERSION}.zip"
+          
+          echo "Downloading CodeSignTool ${CODESIGNTOOL_VERSION}..."
+          curl -L --fail --retry 3 --retry-delay 5 -o codesigntool.zip "${DOWNLOAD_URL}"
+          
+          # Verify the checksum before extraction
+          echo "Verifying checksum..."
+          ACTUAL_CHECKSUM=$(sha256sum codesigntool.zip | awk '{print $1}')
+          
+          if [ "${ACTUAL_CHECKSUM}" != "${EXPECTED_CHECKSUM}" ]; then
+            echo "ERROR: Checksum verification failed!"
+            echo "Expected: ${EXPECTED_CHECKSUM}"
+            echo "Actual:   ${ACTUAL_CHECKSUM}"
+            echo "The downloaded file may have been tampered with or the version may have changed."
+            echo "Do not proceed with signing. Verify the checksum with SSL.com and update the workflow."
+            exit 1
+          fi
+          
+          echo "Checksum verified successfully."
+          unzip -q codesigntool.zip
+          
+          # Verify the expected script exists after extraction
+          if [ ! -f "CodeSignTool.sh" ]; then
+            echo "ERROR: CodeSignTool.sh not found after extraction!"
+            echo "The archive structure may have changed."
+            exit 1
+          fi
+          
+          echo "CodeSignTool ${CODESIGNTOOL_VERSION} downloaded and verified successfully."
       - name: Get EV certificate credential id
         working-directory: nym-wallet/src-tauri
         if: env.SIGN_WINDOWS == 'true'
