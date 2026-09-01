@@ -51,6 +51,27 @@ jobs:
       - name: Move files to /dist/
         run: ../scripts/move-to-dist.sh
 
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-dist
+          path: dist/docs
+          retention-days: 1
+
+  deploy-preview:
+    needs: build
+    if: github.ref != 'refs/heads/master'
+    runs-on: arc-ubuntu-22.04
+    environment:
+      name: vercel-docs-preview
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-dist
+          path: dist/docs
+
       - name: Create Vercel project file
         uses: mobiledevops/secret-to-file-action@v1
         with:
@@ -63,33 +84,57 @@ jobs:
         run: npm install --global vercel@latest
         continue-on-error: false
 
-      - name: Pull Vercel Environment Information (preview)
-        if: github.ref != 'refs/heads/master'
+      - name: Pull Vercel Environment Information
         run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
         working-directory: dist/docs
-      - name: Pull Vercel Environment Information (production)
-        if: github.ref == 'refs/heads/master'
+
+      - name: Build Project Artifacts
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: dist/docs
+        continue-on-error: false
+
+      - name: Deploy Project Artifacts to Vercel
+        id: deploy
+        run: vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: dist/docs
+
+  deploy-production:
+    needs: build
+    if: github.ref == 'refs/heads/master'
+    runs-on: arc-ubuntu-22.04
+    environment:
+      name: vercel-docs-production
+      url: https://nym.com/docs
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-dist
+          path: dist/docs
+
+      - name: Create Vercel project file
+        uses: mobiledevops/secret-to-file-action@v1
+        with:
+          base64-encoded-secret: ${{ secrets.VERCEL_PROJECT_JSON_BASE64 }}
+          filename: "project.json"
+          is-executable: true
+          working-directory: "./dist/docs/.vercel"
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+        continue-on-error: false
+
+      - name: Pull Vercel Environment Information
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         working-directory: dist/docs
         continue-on-error: false
 
-      - name: Build Project Artifacts (preview)
-        if: github.ref != 'refs/heads/master'
-        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: dist/docs
-        continue-on-error: false
-      - name: Build Project Artifacts (production)
-        if: github.ref == 'refs/heads/master'
+      - name: Build Project Artifacts
         run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
         working-directory: dist/docs
         continue-on-error: false
 
-      - name: Deploy Project Artifacts to Vercel (preview)
-        if: github.ref != 'refs/heads/master'
-        run: vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: dist/docs
-      - name: Deploy Project Artifacts to Vercel (master)
-        if: github.ref == 'refs/heads/master'
+      - name: Deploy Project Artifacts to Vercel
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
         working-directory: dist/docs
         continue-on-error: false
