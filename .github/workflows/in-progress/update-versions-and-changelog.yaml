@@ -47,12 +47,20 @@ jobs:
         run: "version-bumper bump binaries --nym-repo-directory nym"
 
       - name: push-changes-to-branch
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
+          # Validate release_version contains only safe characters (alphanumeric, dash, underscore, dot)
+          if ! [[ "$RELEASE_VERSION" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+            echo "Error: release_version must contain only alphanumeric characters, dashes, underscores, and dots, got: '$RELEASE_VERSION'"
+            exit 1
+          fi
+
           git config --global user.name "${{ env.CI_BOT_AUTHOR }}"
           git config --global user.email "${{ env.CI_BOT_EMAIL }}"
-          git checkout -b release/${{ inputs.release_version }}-preparation
+          git checkout -b "release/${RELEASE_VERSION}-preparation"
           git commit -am "chore: version bump in preparation for release"
-          git push -u origin release/${{ inputs.release_version }}-preparation
+          git push -u origin "release/${RELEASE_VERSION}-preparation"
         working-directory: "nym"
 
   update-changelog:
@@ -83,13 +91,37 @@ jobs:
         working-directory: "ci-tools/changelog-updater"
 
       - name: run-changelog-updater
-        run: "changelog-updater mix ${{ inputs.milestone_id }} release/${{ inputs.release_version }}"
+        env:
+          MILESTONE_ID: ${{ inputs.milestone_id }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          # Validate milestone_id is numeric
+          if ! [[ "$MILESTONE_ID" =~ ^[0-9]+$ ]]; then
+            echo "Error: milestone_id must be numeric, got: '$MILESTONE_ID'"
+            exit 1
+          fi
+
+          # Validate release_version contains only safe characters (alphanumeric, dash, underscore, dot)
+          if ! [[ "$RELEASE_VERSION" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+            echo "Error: release_version must contain only alphanumeric characters, dashes, underscores, and dots, got: '$RELEASE_VERSION'"
+            exit 1
+          fi
+
+          changelog-updater mix "$MILESTONE_ID" "release/$RELEASE_VERSION"
 
       - name: push-changes-to-branch
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
+          # Validate release_version contains only safe characters (alphanumeric, dash, underscore, dot)
+          if ! [[ "$RELEASE_VERSION" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+            echo "Error: release_version must contain only alphanumeric characters, dashes, underscores, and dots, got: '$RELEASE_VERSION'"
+            exit 1
+          fi
+
           git config --global user.name "${{ env.CI_BOT_AUTHOR }}"
           git config --global user.email "${{ env.CI_BOT_EMAIL }}"
-          git checkout release/${{ inputs.release_version }}-preparation
+          git checkout "release/${RELEASE_VERSION}-preparation"
           git commit -am "chore: update changelog preparation for release"
           git push
         working-directory: "nym"
