@@ -8,7 +8,7 @@ defaults:
     working-directory: nym-wallet
 jobs:
   publish-tauri:
-    if: ${{ (startsWith(github.ref, 'refs/tags/nym-wallet-') && github.event_name == 'release') || github.event_name == 'workflow_dispatch' }}
+    if: ${{ startsWith(github.ref, 'refs/tags/nym-wallet-') && (github.event_name == 'release' || github.event_name == 'workflow_dispatch') }}
     strategy:
       fail-fast: false
       matrix:
@@ -18,7 +18,19 @@ jobs:
       release_tag: ${{ github.ref_name }}
       
     steps:
+      - name: Validate ref is a nym-wallet release tag
+        shell: bash
+        run: |
+          if [[ ! "${{ github.ref }}" =~ ^refs/tags/nym-wallet- ]]; then
+            echo "Error: This workflow can only be run on nym-wallet release tags (refs/tags/nym-wallet-*)"
+            echo "Current ref: ${{ github.ref }}"
+            exit 1
+          fi
+          echo "Validated ref: ${{ github.ref }}"
+
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref }}
       
       - name: Install system dependencies
         run: |

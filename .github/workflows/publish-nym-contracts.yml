@@ -6,10 +6,22 @@ on:
 
 jobs:
   build:
-    if: ${{ (startsWith(github.ref, 'refs/tags/nym-contracts-') && github.event_name == 'release') || github.event_name == 'workflow_dispatch' }}
+    if: ${{ startsWith(github.ref, 'refs/tags/nym-contracts-') && (github.event_name == 'release' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     steps:
+      - name: Validate ref is a nym-contracts release tag
+        shell: bash
+        run: |
+          if [[ ! "${{ github.ref }}" =~ ^refs/tags/nym-contracts- ]]; then
+            echo "Error: This workflow can only be run on nym-contracts release tags (refs/tags/nym-contracts-*)"
+            echo "Current ref: ${{ github.ref }}"
+            exit 1
+          fi
+          echo "Validated ref: ${{ github.ref }}"
+
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref }}
 
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
