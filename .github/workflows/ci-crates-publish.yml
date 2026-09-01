@@ -41,10 +41,17 @@ jobs:
       - name: Publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          PUBLISH_INTERVAL: ${{ inputs.publish_interval }}
         run: |
+          # Validate publish_interval is a positive integer
+          if ! [[ "$PUBLISH_INTERVAL" =~ ^[0-9]+$ ]]; then
+            echo "Error: publish_interval must be a positive integer, got: $PUBLISH_INTERVAL"
+            exit 1
+          fi
+          
           cargo workspaces publish \
             --publish-as-is \
-            --publish-interval ${{ inputs.publish_interval }}
+            --publish-interval "$PUBLISH_INTERVAL"
 
       - name: Show package versions
         run: cargo workspaces list --long
@@ -78,20 +85,26 @@ jobs:
       - name: Add secondary member as crate owner
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          BACKUP_AUTHOR: ${{ inputs.backup_author }}
         run: |
-          TEAM_MEMBER="${{ inputs.backup_author }}"
-          echo "Checking and adding $TEAM_MEMBER as owner to workspace crates..."
+          # Validate backup_author contains only safe characters (alphanumeric, dash, underscore)
+          if ! [[ "$BACKUP_AUTHOR" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            echo "Error: backup_author must contain only alphanumeric characters, dashes, and underscores, got: $BACKUP_AUTHOR"
+            exit 1
+          fi
+          
+          echo "Checking and adding $BACKUP_AUTHOR as owner to workspace crates..."
 
           cargo workspaces list | while read crate; do
             echo "Checking $crate..."
 
-            if cargo owner --list "$crate" 2>/dev/null | grep -q "$TEAM_MEMBER"; then
-              echo "  $TEAM_MEMBER already owns $crate, skipping"
+            if cargo owner --list "$crate" 2>/dev/null | grep -q "$BACKUP_AUTHOR"; then
+              echo "  $BACKUP_AUTHOR already owns $crate, skipping"
             else
-              echo "  Adding $TEAM_MEMBER as owner of $crate..."
+              echo "  Adding $BACKUP_AUTHOR as owner of $crate..."
               # See TODO in the "Add team as crate owners" step: tolerate the crates.io 403
               # for team-owned crates so a single ownership gap does not abort the publish.
-              cargo owner --add "$TEAM_MEMBER" "$crate" || echo "  WARN: could not add $TEAM_MEMBER to $crate (needs manual ownership sorting); continuing"
+              cargo owner --add "$BACKUP_AUTHOR" "$crate" || echo "  WARN: could not add $BACKUP_AUTHOR to $crate (needs manual ownership sorting); continuing"
               sleep 2
             fi
           done
