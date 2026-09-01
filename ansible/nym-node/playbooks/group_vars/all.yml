@@ -42,6 +42,13 @@ nym_cli_url: "https://github.com/nymtech/nym/releases/download/{{ nym_version }}
 tunnel_manager_url: "https://github.com/nymtech/nym/raw/refs/heads/develop/scripts/nym-node-setup/network-tunnel-manager.sh"
 quic_bridge_deployment_url: "https://raw.githubusercontent.com/nymtech/nym/refs/heads/develop/scripts/nym-node-setup/quic_bridge_deployment.sh"
 
+## SECURITY: SHA256 checksums for deployment scripts
+## These scripts execute as root and MUST be verified before execution.
+## Update these checksums when intentionally upgrading to new script versions.
+## To generate: curl -fsSL <URL> | sha256sum
+tunnel_manager_sha256: ""  # REQUIRED: Set the expected SHA256 checksum for network-tunnel-manager.sh
+quic_bridge_deployment_sha256: ""  # REQUIRED: Set the expected SHA256 checksum for quic_bridge_deployment.sh
+
 packages:
   - tmux
   - speedtest-cli

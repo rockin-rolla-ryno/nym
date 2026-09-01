@@ -1,6 +1,23 @@
+- name: Verify quic_bridge_deployment_sha256 is defined
+  fail:
+    msg: "SECURITY: quic_bridge_deployment_sha256 must be set in group_vars/all.yml before downloading and executing quic_bridge_deployment.sh as root. Generate with: curl -fsSL {{ quic_bridge_deployment_url }} | sha256sum"
+  when: quic_bridge_deployment_sha256 is not defined or quic_bridge_deployment_sha256 == ""
+  tags: quic
+
 - name: Download quic_bridge_deployment.sh
   command:
     cmd: "curl -fsSL {{ quic_bridge_deployment_url }} -o /root/nym-binaries/quic_bridge_deployment.sh"
+  tags: quic
+
+- name: Verify quic_bridge_deployment checksum
+  shell: |
+    ACTUAL_SHA256=$(sha256sum /root/nym-binaries/quic_bridge_deployment.sh | awk '{print $1}')
+    if [ "$ACTUAL_SHA256" != "{{ quic_bridge_deployment_sha256 }}" ]; then
+      echo "SECURITY ERROR: Checksum mismatch for quic_bridge_deployment.sh"
+      echo "Expected: {{ quic_bridge_deployment_sha256 }}"
+      echo "Actual:   $ACTUAL_SHA256"
+      exit 1
+    fi
   tags: quic
 
 - name: Set quic_bridge_deployment permissions
